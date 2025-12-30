@@ -19,8 +19,24 @@ if (!function_exists('env')) {
      */
     function env($varname = null, $default_value = "") {
         if (is_null($varname)) {
-            return getenv();
+            // Return merged environment arrays for full context
+            return array_merge($_ENV, $_SERVER);
         }
-        return getenv($varname) ? getenv($varname) : $default_value;
+
+        // Check _ENV and _SERVER first, then getenv
+        if (array_key_exists($varname, $_ENV)) {
+            $value = $_ENV[$varname];
+        } elseif (array_key_exists($varname, $_SERVER)) {
+            $value = $_SERVER[$varname];
+        } else {
+            $value = getenv($varname);
+            // getenv returns false when not set; treat false as not found
+            if ($value === false) {
+                $value = null;
+            }
+        }
+
+        // If variable not found, return default. Important: allow falsy values like "0" or empty string.
+        return ($value === null) ? $default_value : $value;
     }
 }

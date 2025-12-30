@@ -50,7 +50,7 @@ class MY_DB_mysqli_driver extends CI_DB_mysqli_driver
     public function insert($table = '', $set = NULL, $escape = NULL)
     {
         $status = parent::insert($table , $set, $escape);
-        // $this->trail($status,'insert', $table, $set);
+        $this->trail($status,'insert', $table, $set);
        
         return $status;
     }
@@ -102,8 +102,13 @@ class MY_DB_mysqli_driver extends CI_DB_mysqli_driver
 
         $this->qb_where = $condition; // reset where condition
 
-        $status= parent::update($table, $set, $where, $limit);
-        // $this->trail($status,'update', $table, $set, $previous_values);
+        // If $set is null (e.g. using $this->db->set(...) before update()), fallback to internal qb_set
+        if (is_null($set) && isset($this->qb_set) && !empty($this->qb_set)) {
+            $set = $this->qb_set;
+        }
+
+        $status = parent::update($table, $set, $where, $limit);
+        $this->trail($status,'update', $table, $set, $previous_values);
 
         return $status;
     }
@@ -142,7 +147,7 @@ class MY_DB_mysqli_driver extends CI_DB_mysqli_driver
         }
 
         $status= parent::delete($table, $where, $limit, $reset_data);
-        // $this->trail($status,'delete', $table, $where, $previous_values);
+        $this->trail($status,'delete', $table, $where, $previous_values);
 
         return $status;
     }

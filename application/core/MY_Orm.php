@@ -773,13 +773,28 @@ class MY_Orm extends CI_Model// implements \ArrayAccess
         // Model Condition
         $query = $this->_findByCondition($condition);
 
+        // Read current values as previous values (compile select without reset to avoid duplicate FROM)
+        $previous_values = null;
+        $compiledSelect = $query->get_compiled_select('', false);
+        $result = $this->_dbr->query($compiledSelect);
+        $previous_values = ($result) ? $result->row_array() : null;
+        if ($result) $result->free_result();
+
         $attributes = $this->_attrEventBeforeUpdate($attributes);
 
-        // Pack query then move it to write DB from read DB
+        // Re-apply condition and Pack query then move it to write DB from read DB
+        $query = $this->_findByCondition($condition);
         $sql = $this->_dbr->set($attributes)->get_compiled_update();
         $this->_dbr->reset_query();
 
-        return $this->_db->query($sql);
+        $status = $this->_db->query($sql);
+
+        // Trigger audit trail on update (ORM performs raw query so it bypasses DB driver's update())
+        if (method_exists($this->_db, 'trail')) {
+            $this->_db->trail($status, 'update', $this->tableName, $attributes, $previous_values);
+        }
+
+        return $status;
     }
 
     /**

@@ -426,4 +426,13 @@ class Helpers
         return $this->CI->router->fetch_module() .'/'. $slug_controller .'/'. $slug_method;
     }
 
+	public static function isJson($string): bool
+	{
+		if (!is_string($string) || trim($string) === '') {
+			return false;
+		}
+		$data = json_decode($string);
+		return (json_last_error() === JSON_ERROR_NONE) && (is_object($data) || is_array($data));
+	}
+
 }

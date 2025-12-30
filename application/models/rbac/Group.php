@@ -16,14 +16,14 @@ class Group extends MY_Model {
 	const MANAJEMEN_DIR = 6;
 	const MANAJEMEN_CABANG = 7;
 
-	public function getListGroup($parent = '')
+	public function getListGroup($parent = [])
 	{
 		$data_groups = $this->getAll();
 
 
 		$groups = [];
 		foreach ($data_groups as $key => $value) {
-			$child_of = json_decode($value->parent_id, true);
+			$child_of = Helpers::isJson($value->parent_id) ? json_decode($value->parent_id, true) : [];
 
 			if (empty($child_of)) {
 				$child_of = [];

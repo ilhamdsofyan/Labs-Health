@@ -49,6 +49,10 @@ class Events extends MY_Model
 			'value' => 'Maintenance System',
 			'color' => '#6C757D'
 		],
+		'observance' => [
+			'value' => 'Hari Peringatan (non-libur)',
+			'color' => '#ADB5BD'
+		]
 	];
 
 	public function getCategoryOptions()
@@ -79,6 +83,11 @@ class Events extends MY_Model
 			->result();
 
 		return $data;
+	}
+
+	public function store($data)
+	{
+		return $this->insert($data);
 	}
 }
 

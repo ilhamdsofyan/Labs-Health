@@ -1,13 +1,34 @@
 <?php defined('BASEPATH') OR exit('No direct script access allowed'); ?>
 
-<div class="error-page">
-	<h2 class="headline text-warning"> <?= $status_code ?></h2>
+<?php
+// Prefer passed $layout object, fallback to $this->layout or global CI->layout
+$layout = isset($layout) ? $layout : (isset($this) && isset($this->layout) ? $this->layout : (function_exists('get_instance') ? (get_instance()->layout ?? null) : null));
+if ($layout) {
+	$layout->setSection('title', $status_code .' | '. $heading);
+	$layout->setSection('title_icon', 'alert-circle');
+}
+?>
 
-	<div class="error-content">
-		<h3><i class="fas fa-exclamation-triangle text-warning"></i> <?= $heading ?>.</h3>
+<?php
+if ($layout) {
+	$layout->startSection('content');
+} else {
+	// no layout, render content directly
+}
+?>
 
-		<p><?= $message ?>.</p>
-	</div>
-	<!-- /.error-content -->
-</div>
-<!-- /.error-page -->
+<img class="img-fluid p-4" src="<?= base_url('web/assets/img/illustrations/500-internal-server-error.svg') ?>" alt>
+<p class="lead">
+	<?= htmlspecialchars($message, ENT_QUOTES, 'UTF-8') ?>
+</p>
+<a class="text-arrow-icon" href="<?= base_url('/site') ?>">
+	<i class="ms-0 me-1" data-feather="arrow-left"></i>
+	Return to Dashboard
+</a>
+
+<?php
+if ($layout) {
+	$layout->endSection();
+}
+?>
+

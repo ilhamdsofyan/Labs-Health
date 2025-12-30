@@ -58,9 +58,18 @@ class MY_Exceptions extends CI_Exceptions
 		511	=> 'Network Authentication Required',
 	];
 
+	protected $handling = false;
+
 	public function show_error($heading, $message, $template = 'error_general', $status_code = 500)
 	{
+		// prevent recursive errors causing infinite loops
+		if ($this->handling) {
+			return parent::show_error($heading, $message, $template, $status_code);
+		}
+		$this->handling = true;
+
 		if (!class_exists('CI_Controller')) {
+			$this->handling = false;
 			return parent::show_error($heading, $message, 'error_general', 500);
 		}
 
@@ -78,31 +87,246 @@ class MY_Exceptions extends CI_Exceptions
 		if (is_cli()) {
 			$message = "\t".(is_array($message) ? implode("\n\t", $message) : $message);
 			$template = 'cli'.DIRECTORY_SEPARATOR.$template;
-		} else {
-			set_status_header($status_code);
-			$message = '<p>'.(is_array($message) ? implode('</p><p>', $message) : $message).'</p>';
-			$template = 'html'.'/'.$template;
 
-			$view = $CI->load->view('layouts/error', [
-				'data' => [
-					'heading' => def($this->stati, $status_code, $heading),
-					'message' => $message,
-					'status_code' => $status_code,
-				],
-				'title' => $status_code .' '. def($this->stati, $status_code),
-				'view' => 'errors/'.$template
-			], true);
-		}
+            // For CLI just render the CLI view and return
+            $view = $CI->load->view('errors/'.$template, [
+                'heading' => $heading,
+                'message' => $message
+            ], true);
 
-		if (ob_get_level() > $this->ob_level + 1) {
-			ob_end_flush();
-		}
+        } else {
+            set_status_header($status_code);
+            // keep message as plain text (views are responsible to wrap in <p> or markup)
+            $message = (is_array($message) ? implode("\n", $message) : $message);
+            $template = 'html'.'/'.$template;
 
+			if (!isset($CI->layout)) {
+				$CI->load->library('Layout');
+			}
+
+            $layoutData = [
+                'data' => [
+                    'heading' => def($this->stati, $status_code, $heading),
+                    'message' => $message,
+                    'status_code' => $status_code,
+                    'layout' => $CI->layout ?? null,
+                ],
+                'title' => $status_code .' '. def($this->stati, $status_code),
+                'view' => 'errors/'.$template
+            ];
+
+            try {
+                $CI->layout->setLayout('error');
+                $CI->layout->viewFolder = 'errors/html';
+                $view = $CI->layout->render('custom_error_general', $layoutData['data'], true);
+
+                // fallback to error_simple layout when layout returns empty
+                if (empty($view)) {
+                    try {
+                        $CI->layout->setLayout('error_simple');
+                        $view = $CI->layout->render('custom_error_general', $layoutData['data'], true);
+                    } catch (Exception $_e) {
+                        // ignore and fallback to plain view
+                    }
+                }
+
+                // fallback to plain view when layout returns empty or fails silently
+                if (empty($view)) {
+                    $view = $CI->load->view('errors/'.$template, $layoutData['data'], true);
+                }
+
+            } catch (Exception $e) {
+                // safe fallback to simple error view
+                try {
+                    if (!empty($CI->layout)) {
+                        $CI->layout->setLayout('error_simple');
+                        $CI->layout->viewFolder = 'errors/html';
+                        $view = $CI->layout->render('custom_error_general', $layoutData['data'], true);
+                    }
+                } catch (Exception $_e) {
+                    // ignore
+                }
+
+                if (empty($view)) {
+                    $view = $CI->load->view('errors/'.$template, $layoutData['data'], true);
+                }
+            }
+        }
+
+		$this->handling = false;
 		ob_start();
 		echo $view;
 		$buffer = ob_get_contents();
 		ob_end_clean();
 		return $buffer;
 	}
-	
+
+	public function show_exception($exception)
+	{
+		// prevent recursive handling
+		if ($this->handling) {
+			return parent::show_exception($exception);
+		}
+		$this->handling = true;
+
+		if (!class_exists('CI_Controller')) {
+			$this->handling = false;
+			return parent::show_exception($exception);
+		}
+
+		$CI =& get_instance();
+		$templates_path = config_item('error_views_path');
+
+		if (empty($templates_path)) {
+			$templates_path = VIEWPATH.'errors'.DIRECTORY_SEPARATOR;
+		}
+
+		$message = $exception->getMessage();
+		if (empty($message)) {
+			$message = '(null)';
+		}
+
+		set_status_header(500);
+
+		$layoutData = [
+			'data' => [
+				'heading' => 'Exception',
+				'message' => $message,
+				'exception' => $exception,
+				'status_code' => 500,
+				'layout' => $CI->layout ?? null,
+			],
+			'title' => 'Exception',
+			'view' => 'errors/html/error_exception'
+		];
+
+		try {
+			if (!isset($CI->layout)) {
+				$CI->load->library('Layout');
+			}
+
+			$CI->layout->setLayout('error');
+			$CI->layout->viewFolder = 'errors/html';
+			$view = $CI->layout->render('error_exception', $layoutData['data'], true);
+
+			if (empty($view)) {
+				try {
+					$CI->layout->setLayout('error_simple');
+					$view = $CI->layout->render('error_exception', $layoutData['data'], true);
+				} catch (Exception $_e) {
+					// ignore
+				}
+			}
+
+			if (empty($view)) {
+				$view = $CI->load->view('errors/html/error_exception', $layoutData['data'], true);
+			}
+
+		} catch (Exception $e) {
+			try {
+				if (!empty($CI->layout)) {
+					$CI->layout->setLayout('error_simple');
+					$CI->layout->viewFolder = 'errors/html';
+					$view = $CI->layout->render('error_exception', $layoutData['data'], true);
+				}
+			} catch (Exception $_e) {
+				// ignore
+			}
+
+			if (empty($view)) {
+				$view = $CI->load->view('errors/html/error_exception', $layoutData['data'], true);
+			}
+		}
+
+		$this->handling = false;
+		echo $view;
+	}
+
+	public function show_php_error($severity, $message, $filepath, $line)
+	{
+		// prevent recursive handling
+		if ($this->handling) {
+			return parent::show_php_error($severity, $message, $filepath, $line);
+		}
+		$this->handling = true;
+
+		if (!class_exists('CI_Controller')) {
+			$this->handling = false;
+			return parent::show_php_error($severity, $message, $filepath, $line);
+		}
+
+		$CI =& get_instance();
+		$templates_path = config_item('error_views_path');
+
+		if (empty($templates_path)) {
+			$templates_path = VIEWPATH.'errors'.DIRECTORY_SEPARATOR;
+		}
+
+		$severityName = isset($this->stati[$severity]) ? $this->stati[$severity] : $severity;
+
+		// shorten filepath for non-cli
+		if (!is_cli()) {
+			$filepath = str_replace('\\', '/', $filepath);
+			if (FALSE !== strpos($filepath, '/')) {
+				$x = explode('/', $filepath);
+				$filepath = $x[count($x)-2].'/'.end($x);
+			}
+		}
+
+		set_status_header(500);
+
+		$layoutData = [
+			'data' => [
+				'severity' => $severityName,
+				'message' => $message,
+				'filepath' => $filepath,
+				'line' => $line,
+				'status_code' => 500,
+				'layout' => $CI->layout ?? null,
+			],
+			'title' => 'PHP Error',
+			'view' => 'errors/html/error_php'
+		];
+
+		try {
+			if (!isset($CI->layout)) {
+				$CI->load->library('Layout');
+			}
+
+			$CI->layout->setLayout('error');
+			$CI->layout->viewFolder = 'errors/html';
+			$view = $CI->layout->render('error_php', $layoutData['data'], true);
+
+			if (empty($view)) {
+				try {
+					$CI->layout->setLayout('error_simple');
+					$view = $CI->layout->render('error_php', $layoutData['data'], true);
+				} catch (Exception $_e) {
+					// ignore
+				}
+			}
+
+			if (empty($view)) {
+				$view = $CI->load->view('errors/html/error_php', $layoutData['data'], true);
+			}
+
+		} catch (Exception $e) {
+			try {
+				if (!empty($CI->layout)) {
+					$CI->layout->setLayout('error_simple');
+					$CI->layout->viewFolder = 'errors/html';
+					$view = $CI->layout->render('error_php', $layoutData['data'], true);
+				}
+			} catch (Exception $_e) {
+				// ignore
+			}
+
+			if (empty($view)) {
+				$view = $CI->load->view('errors/html/error_php', $layoutData['data'], true);
+			}
+		}
+
+		$this->handling = false;
+		echo $view;
+}
 }

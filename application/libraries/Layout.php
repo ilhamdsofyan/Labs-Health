@@ -83,28 +83,30 @@ class Layout
         $this->layoutsFodler = $layoutFolder;
     }
 
-    public function render($view, $data = [])
+    public function render($view, $data = [], $return = false)
     {
         $controller = str_replace('Controller', '', $this->ci->router->fetch_class());
         $slug_controller = camelToSlug($controller, '-');
 
         $method = $this->ci->router->fetch_method();
-        $viewFolder = !($this->viewFolder) ? $slug_controller .'/'. $view : $this->viewFolder;
+        // Build the actual view path. If viewFolder is provided, append the view name to it.
+        $contentView = !($this->viewFolder) ? $slug_controller .'/'. $view : rtrim($this->viewFolder, '/') .'/'. $view;
         // $view = !($this->view) ? $method : $this->view;
 
         $loadedData = array();
-        $loadedData['view'] = $viewFolder;
+        $loadedData['view'] = $contentView;
         $loadedData['data'] = $data;
         $loadedData['title'] = $this->title;
         $loadedData['subtitle'] = $this->subtitle;
         $loadedData['title_icon'] = $this->title_icon;
-        $loadedData['content'] = $this->ci->load->view($viewFolder, $data, true);
+        $loadedData['content'] = $this->ci->load->view($contentView, $data, true);
 
         if (!empty($this->view_js)) {
             if (is_string($this->view_js)) {
                 $view_js = $slug_controller .'/'. $this->view_js;
 
             } elseif (is_array($this->view_js)) {
+                $view_js = [];
                 foreach ($this->view_js as $key => $js) {
                     $view_js[] = $slug_controller .'/'. $js;
                 }
@@ -119,6 +121,7 @@ class Layout
                 $view_css = $slug_controller .'/'. $this->view_css;
 
             } elseif (is_array($this->view_css)) {
+                $view_css = [];
                 foreach ($this->view_css as $key => $css) {
                     $view_css[] = $slug_controller .'/'. $css;
                 }
@@ -129,20 +132,20 @@ class Layout
         }
 
         $layoutPath = $this->layoutsFodler.'/'.$this->layout;
-        return $this->ci->load->view($layoutPath, $loadedData);
+        return $this->ci->load->view($layoutPath, $loadedData, $return);
     }
 
-    public function renderPartial($view, $data = [])
+    public function renderPartial($view, $data = [], $return = false)
     {
         $controller = str_replace('Controller', '', $this->ci->router->fetch_class());
         $slug_controller = camelToSlug($controller, '-');
 
         $method = $this->ci->router->fetch_method();
-        $viewFolder = !($this->viewFolder) ? $slug_controller .'/'. $view : $this->viewFolder;
+        $contentView = !($this->viewFolder) ? $slug_controller .'/'. $view : rtrim($this->viewFolder, '/') .'/'. $view;
 
         $loadedData = array();
         $loadedData['data'] = $data;
 
-        $this->ci->load->view($viewFolder, $data);
+        return $this->ci->load->view($contentView, $data, $return);
     }
 }
